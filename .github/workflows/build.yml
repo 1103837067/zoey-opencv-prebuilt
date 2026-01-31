@@ -1,0 +1,238 @@
+name: Build OpenCV
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      opencv_version:
+        description: 'OpenCV version to build'
+        required: false
+        default: '4.10.0'
+
+env:
+  OPENCV_VERSION: ${{ github.event.inputs.opencv_version || '4.10.0' }}
+
+jobs:
+  build-macos-arm64:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Build Dependencies
+        run: |
+          brew install cmake ninja pkg-config jpeg-turbo libpng libtiff webp openjpeg zlib || true
+
+      - name: Build OpenCV
+        run: |
+          echo "=== Downloading OpenCV ${OPENCV_VERSION} ==="
+          curl -sL "https://github.com/opencv/opencv/archive/refs/tags/${OPENCV_VERSION}.tar.gz" | tar xz
+          
+          echo "=== Building OpenCV (gocv required modules) ==="
+          mkdir -p opencv-${OPENCV_VERSION}/build
+          cd opencv-${OPENCV_VERSION}/build
+          
+          # gocv 核心依赖模块:
+          # core, imgproc, imgcodecs, features2d, flann, calib3d, 
+          # objdetect, dnn, video, photo, highgui, videoio
+          cmake .. -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/opencv-install \
+            -DBUILD_LIST=core,imgproc,imgcodecs,features2d,flann,calib3d,objdetect,dnn,video,photo,highgui,videoio \
+            -DWITH_QT=OFF \
+            -DWITH_GTK=OFF \
+            -DWITH_FFMPEG=OFF \
+            -DWITH_GSTREAMER=OFF \
+            -DWITH_AVFOUNDATION=OFF \
+            -DWITH_V4L=OFF \
+            -DWITH_DSHOW=OFF \
+            -DWITH_MSMF=OFF \
+            -DWITH_VTK=OFF \
+            -DWITH_OPENGL=OFF \
+            -DWITH_OPENCL=OFF \
+            -DWITH_IPP=OFF \
+            -DWITH_TBB=OFF \
+            -DWITH_LAPACK=OFF \
+            -DBUILD_opencv_apps=OFF \
+            -DBUILD_opencv_viz=OFF \
+            -DBUILD_opencv_python3=OFF \
+            -DBUILD_opencv_python2=OFF \
+            -DBUILD_opencv_java=OFF \
+            -DBUILD_TESTS=OFF \
+            -DBUILD_PERF_TESTS=OFF \
+            -DBUILD_EXAMPLES=OFF \
+            -DBUILD_DOCS=OFF \
+            -DBUILD_SHARED_LIBS=ON \
+            -DBUILD_ZLIB=OFF \
+            -DBUILD_PNG=OFF \
+            -DBUILD_JPEG=OFF \
+            -DBUILD_TIFF=OFF \
+            -DBUILD_WEBP=OFF \
+            -DBUILD_OPENJPEG=OFF \
+            -DBUILD_OPENEXR=OFF \
+            -DOPENCV_GENERATE_PKGCONFIG=OFF
+          
+          ninja -j$(sysctl -n hw.ncpu)
+          ninja install
+
+      - name: Create pkgconfig file
+        run: |
+          mkdir -p ${{ github.workspace }}/opencv-install/lib/pkgconfig
+          cat > ${{ github.workspace }}/opencv-install/lib/pkgconfig/opencv4.pc << 'EOF'
+          prefix=${pcfiledir}/../..
+          exec_prefix=${prefix}
+          libdir=${exec_prefix}/lib
+          includedir=${prefix}/include/opencv4
+          
+          Name: OpenCV
+          Description: Open Source Computer Vision Library
+          Version: 4.10.0
+          Libs: -L${libdir} -lopencv_core -lopencv_imgproc -lopencv_imgcodecs -lopencv_features2d -lopencv_flann -lopencv_calib3d -lopencv_objdetect -lopencv_dnn -lopencv_video -lopencv_photo -lopencv_highgui -lopencv_videoio
+          Cflags: -I${includedir}
+          EOF
+
+      - name: Package
+        run: |
+          cd ${{ github.workspace }}/opencv-install
+          tar czf ../opencv-${OPENCV_VERSION}-macos-arm64.tar.gz *
+          ls -lh ../opencv-${OPENCV_VERSION}-macos-arm64.tar.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencv-${{ env.OPENCV_VERSION }}-macos-arm64
+          path: opencv-${{ env.OPENCV_VERSION }}-macos-arm64.tar.gz
+
+  build-windows-x64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkg-config
+            zip
+
+      - name: Build OpenCV
+        shell: msys2 {0}
+        run: |
+          echo "=== Downloading OpenCV ${OPENCV_VERSION} ==="
+          curl -sL "https://github.com/opencv/opencv/archive/refs/tags/${OPENCV_VERSION}.tar.gz" | tar xz
+          
+          echo "=== Building OpenCV (gocv required modules) ==="
+          mkdir -p opencv-${OPENCV_VERSION}/build
+          cd opencv-${OPENCV_VERSION}/build
+          
+          cmake .. -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/c/opencv-install \
+            -DBUILD_LIST=core,imgproc,imgcodecs,features2d,flann,calib3d,objdetect,dnn,video,photo,highgui,videoio \
+            -DWITH_QT=OFF \
+            -DWITH_GTK=OFF \
+            -DWITH_FFMPEG=OFF \
+            -DWITH_GSTREAMER=OFF \
+            -DWITH_V4L=OFF \
+            -DWITH_DSHOW=OFF \
+            -DWITH_MSMF=OFF \
+            -DWITH_VTK=OFF \
+            -DWITH_OPENGL=OFF \
+            -DWITH_OPENCL=OFF \
+            -DWITH_CUDA=OFF \
+            -DWITH_IPP=OFF \
+            -DWITH_TBB=OFF \
+            -DWITH_LAPACK=OFF \
+            -DBUILD_opencv_apps=OFF \
+            -DBUILD_opencv_viz=OFF \
+            -DBUILD_opencv_python3=OFF \
+            -DBUILD_opencv_python2=OFF \
+            -DBUILD_opencv_java=OFF \
+            -DBUILD_TESTS=OFF \
+            -DBUILD_PERF_TESTS=OFF \
+            -DBUILD_EXAMPLES=OFF \
+            -DBUILD_DOCS=OFF \
+            -DBUILD_SHARED_LIBS=ON \
+            -DBUILD_ZLIB=ON \
+            -DBUILD_PNG=ON \
+            -DBUILD_JPEG=ON \
+            -DBUILD_TIFF=OFF \
+            -DBUILD_WEBP=OFF \
+            -DBUILD_OPENJPEG=OFF \
+            -DBUILD_OPENEXR=OFF \
+            -DOPENCV_GENERATE_PKGCONFIG=OFF
+          
+          ninja -j$(nproc)
+          ninja install
+
+      - name: Create pkgconfig file
+        shell: msys2 {0}
+        run: |
+          mkdir -p /c/opencv-install/lib/pkgconfig
+          cat > /c/opencv-install/lib/pkgconfig/opencv4.pc << 'EOF'
+          prefix=${pcfiledir}/../..
+          exec_prefix=${prefix}
+          libdir=${exec_prefix}/lib
+          includedir=${prefix}/include/opencv4
+          
+          Name: OpenCV
+          Description: Open Source Computer Vision Library
+          Version: 4.10.0
+          Libs: -L${libdir} -lopencv_core -lopencv_imgproc -lopencv_imgcodecs -lopencv_features2d -lopencv_flann -lopencv_calib3d -lopencv_objdetect -lopencv_dnn -lopencv_video -lopencv_photo -lopencv_highgui -lopencv_videoio
+          Cflags: -I${includedir}
+          EOF
+
+      - name: Package
+        shell: msys2 {0}
+        run: |
+          cd /c/opencv-install
+          zip -r /c/opencv-${OPENCV_VERSION}-windows-x64.zip *
+          ls -lh /c/opencv-${OPENCV_VERSION}-windows-x64.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencv-${{ env.OPENCV_VERSION }}-windows-x64
+          path: C:/opencv-${{ env.OPENCV_VERSION }}-windows-x64.zip
+
+  release:
+    needs: [build-macos-arm64, build-windows-x64]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          body: |
+            ## OpenCV ${{ env.OPENCV_VERSION }} Pre-built for gocv
+            
+            ### Included modules
+            - core, imgproc, imgcodecs, features2d, flann, calib3d
+            - objdetect, dnn, video, photo, highgui, videoio
+            
+            ### Downloads
+            - `opencv-${{ env.OPENCV_VERSION }}-macos-arm64.tar.gz` - macOS ARM64
+            - `opencv-${{ env.OPENCV_VERSION }}-windows-x64.zip` - Windows x64
+            
+            ### Usage
+            ```bash
+            # macOS
+            tar xzf opencv-${{ env.OPENCV_VERSION }}-macos-arm64.tar.gz -C ~/opencv-minimal
+            export PKG_CONFIG_PATH=~/opencv-minimal/lib/pkgconfig
+            
+            # Windows (MSYS2)
+            unzip opencv-${{ env.OPENCV_VERSION }}-windows-x64.zip -d /c/opencv-minimal
+            export PKG_CONFIG_PATH=/c/opencv-minimal/lib/pkgconfig
+            ```
