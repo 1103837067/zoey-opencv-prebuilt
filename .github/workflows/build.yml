@@ -13,6 +13,9 @@ on:
 env:
   OPENCV_VERSION: ${{ github.event.inputs.opencv_version || '4.10.0' }}
 
+permissions:
+  contents: write
+
 jobs:
   build-macos-arm64:
     runs-on: macos-latest
