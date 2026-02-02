@@ -56,6 +56,7 @@ jobs:
             -DWITH_IPP=OFF \
             -DWITH_TBB=OFF \
             -DWITH_LAPACK=OFF \
+            -DWITH_OBSENSOR=OFF \
             -DBUILD_opencv_apps=OFF \
             -DBUILD_opencv_viz=OFF \
             -DBUILD_opencv_python3=OFF \
@@ -151,6 +152,7 @@ jobs:
             -DWITH_IPP=OFF \
             -DWITH_TBB=OFF \
             -DWITH_LAPACK=OFF \
+            -DWITH_OBSENSOR=OFF \
             -DBUILD_opencv_apps=OFF \
             -DBUILD_opencv_viz=OFF \
             -DBUILD_opencv_python3=OFF \
